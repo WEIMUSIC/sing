@@ -140,6 +140,11 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
       <select id="songSel" class="sel"></select>
       <button class="opt" id="demoSetup" type="button">🔊 先聽示範</button>
     </div>
+    <div class="row pitchOnly" style="display:none"><div class="label">示範音色</div>
+      <button class="opt" data-timbre="voice">🎤 人聲<small>唱出 Do Re Mi</small></button>
+      <button class="opt" data-timbre="piano">🎹 鋼琴</button>
+      <button class="opt" data-timbre="both">🎤＋🎹 一起</button>
+    </div>
     <div class="row songOnly" style="display:none"><div class="label">唱法</div>
       <button class="opt on" data-pace="wait">🐢 慢慢練<small>唱準了才換下一個音</small></button>
       <button class="opt" data-pace="beat">🥁 跟拍挑戰<small>跟著節拍唱，沒唱完再唱一次</small></button>
@@ -193,6 +198,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
     <div class="timer" id="timer">⏱ 0.0 秒</div>
     <div><select id="songSel2" class="sel" style="display:none;font-size:14px;padding:5px 8px"></select>
          <button class="smallbtn" id="demoBtn" style="display:none">🔊 示範</button>
+         <button class="smallbtn" id="timbreBtn" style="display:none"></button>
          <button class="smallbtn" id="playRef" style="display:none">🔊 聽目標音</button>
          <button class="smallbtn" id="pauseBtn" style="font-size:16px;font-weight:700">⏸ 暫停</button>
          <button class="smallbtn" id="calBtn">🎚 校正音量</button>
@@ -381,8 +387,12 @@ const SOLFA = [
 const PC_NAME = {0:'Do',1:'#Do',2:'Re',3:'#Re',4:'Mi',5:'Fa',6:'#Fa',7:'Sol',8:'#Sol',9:'La',10:'#La',11:'Si'};
 
 /* ===================== 設定 ===================== */
-const cfg = {mode:'choir', len:15, count:5, range:3, sens:10, tol:90, pace:'wait', speed:0.75, song:null};
+const cfg = {mode:'choir', len:15, count:5, range:3, sens:10, tol:90, pace:'wait', speed:0.75, song:null, timbre:'voice'};
+try{ cfg.timbre=localStorage.getItem('heal_timbre')||'voice'; }catch(e){}
 function refreshSetup(){
+  try{ localStorage.setItem('heal_timbre',cfg.timbre); }catch(e){}
+  document.querySelectorAll('.opt[data-timbre]').forEach(x=>x.classList.toggle('on',x.dataset.timbre===cfg.timbre));
+  const tb=document.getElementById('timbreBtn'); if(tb) tb.textContent={voice:'🎤 人聲',piano:'🎹 鋼琴',both:'🎤＋🎹'}[cfg.timbre];
   document.getElementById('noteRow').style.display = cfg.mode==='note'?'flex':'none';
   document.querySelectorAll('.songOnly').forEach(r=>r.style.display = cfg.mode==='song'?'flex':'none');
   document.getElementById('speedRow').style.display = cfg.mode==='song'&&cfg.pace==='beat'?'flex':'none';
@@ -498,14 +508,71 @@ function readMic(){
   else fHist.length=0;
   return {level, freq, clarity:p.clarity, db};
 }
-function playTone(f, dur=1.2){
+function ensureAC(){
   if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+  if(actx.state==='suspended') actx.resume();
+  return actx;
+}
+function playTone(f, dur=1.2){   // 簡單提示音（音效用）
+  ensureAC();
   const o=actx.createOscillator(), g=actx.createGain();
   o.type='triangle'; o.frequency.value=f;
   g.gain.setValueAtTime(0,actx.currentTime);
   g.gain.linearRampToValueAtTime(.25,actx.currentTime+.05);
   g.gain.linearRampToValueAtTime(0,actx.currentTime+dur);
   o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+dur+.05);
+}
+/* ---- 示範音色：人聲（沿用唱名泡泡的唱名人聲）／鋼琴 ---- */
+let voiceBufs=null, voiceLoading=null;
+function loadVoices(){
+  if(voiceBufs) return Promise.resolve();
+  if(voiceLoading) return voiceLoading;
+  ensureAC();
+  voiceLoading=Promise.all([...Array(12).keys()].map(i=>
+      fetch(`voice/${i}.mp3`).then(r=>{ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then(b=>new Promise((res,rej)=>actx.decodeAudioData(b,res,rej)))))
+    .then(b=>{ voiceBufs=b; })
+    .catch(e=>{ console.warn('人聲載入失敗，改用鋼琴',e); voiceLoading=null; });
+  return voiceLoading;
+}
+function pianoNote(n,t,dur,vol){
+  const f=noteFreq(n), nodes=[];
+  const g=actx.createGain(), lp=actx.createBiquadFilter();
+  lp.type='lowpass'; lp.frequency.value=Math.min(8000,f*8); lp.Q.value=0.4;
+  g.connect(lp).connect(actx.destination);
+  const amps=[0.5,0.3,0.16,0.09,0.05,0.03,0.02];
+  amps.forEach((a0,i)=>{
+    const k=i+1, o=actx.createOscillator(), h=actx.createGain();
+    o.frequency.value=f*k*(1+0.0003*k*k);                // 鋼琴弦的泛音略微偏高
+    const a=vol*a0, tau=1.6/Math.pow(k,0.8);             // 高泛音衰減得比較快
+    h.gain.setValueAtTime(0,t); h.gain.linearRampToValueAtTime(a,t+0.004);
+    h.gain.setTargetAtTime(0.0001,t+0.004,tau);
+    h.gain.setTargetAtTime(0.0001,t+Math.max(0.1,dur*0.95),0.05);   // 放開琴鍵
+    o.connect(h).connect(g); o.start(t); o.stop(t+dur+0.4); nodes.push(o);
+  });
+  return nodes;
+}
+function voiceNote(n,t,dur,vol){
+  const b=voiceBufs && voiceBufs[Math.max(0,Math.min(11,Math.floor(n)))];
+  if(!b) return null;
+  const LEAD=.07, st=Math.max(actx.currentTime, t-LEAD);   // 母音對齊拍點
+  const d=Math.max(.24,Math.min(dur,b.duration-.06));
+  const src=actx.createBufferSource(), g=actx.createGain();
+  src.buffer=b; if(SH(n)) src.playbackRate.value=Math.pow(2,1/12);
+  src.connect(g).connect(actx.destination);
+  const v=vol*1.5;
+  g.gain.setValueAtTime(.0001,st); g.gain.exponentialRampToValueAtTime(v,st+.012);
+  g.gain.setValueAtTime(v,st+d); g.gain.exponentialRampToValueAtTime(.0001,st+d+.09);
+  src.start(st); src.stop(st+d+.12);
+  return [src];
+}
+function playNote(n,t,dur,vol=0.3){
+  ensureAC(); if(t==null) t=actx.currentTime+0.02;
+  let sang=null;
+  if(cfg.timbre!=='piano'){ sang=voiceNote(n,t,dur,vol); if(!sang) loadVoices(); }
+  const out=sang?[...sang]:[];
+  if(!sang || cfg.timbre==='both') out.push(...pianoNote(n,t,dur, cfg.timbre==='both'&&sang?vol*0.55:vol));
+  return out;
 }
 function click(accent){
   if(!actx) return;
@@ -520,21 +587,15 @@ const notePc = n => (SEMI[DG(n)]+(SH(n)?1:0))%12;
 /* ---- 示範：電腦把整首歌彈一次（示範時不計分，避免麥克風收到喇叭聲） ---- */
 let demoOsc=[], demoUntil=0;
 function stopDemo(){ demoOsc.forEach(o=>{try{o.stop();}catch(e){}}); demoOsc=[]; demoUntil=0; }
-function playDemo(song){
-  if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
-  if(actx.state==='suspended') actx.resume();
+async function playDemo(song){
+  ensureAC();
   if(demoUntil>actx.currentTime){ stopDemo(); return; }
+  if(cfg.timbre!=='piano' && !voiceBufs){ demoUntil=actx.currentTime+3; await Promise.race([loadVoices(), new Promise(r=>setTimeout(r,3000))]); }
   const notes=parseSong(song.text).notes, sp=60/(song.tempo||96);
   let t=actx.currentTime+0.15;
   notes.forEach(nt=>{
     const dur=nt.beats*sp;
-    if(!nt.rest){
-      const o=actx.createOscillator(), g=actx.createGain();
-      o.type='triangle'; o.frequency.value=noteFreq(nt.n);
-      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.22,t+.03);
-      g.gain.setValueAtTime(.22,t+dur*.85); g.gain.linearRampToValueAtTime(0,t+dur*.95);
-      o.connect(g).connect(actx.destination); o.start(t); o.stop(t+dur); demoOsc.push(o);
-    }
+    if(!nt.rest) demoOsc.push(...playNote(nt.n,t,dur*0.95,0.3));
     t+=dur;
   });
   demoUntil=t;
@@ -609,6 +670,8 @@ function startGame(){
   $('noteBox').querySelector('h3').textContent = isSong?'現在要唱':'請唱這個音';
   $('playRef').style.display = (isNote||isSong)?'inline-block':'none';
   $('demoBtn').style.display = isSong?'inline-block':'none';
+  $('timbreBtn').style.display = (isNote||isSong)?'inline-block':'none';
+  if(isNote||isSong) loadVoices();
   $('songSel2').style.display = isSong?'inline-block':'none';
   $('strip').style.display = isSong?'block':'none';
   $('songSel2').value = cfg.song;
@@ -915,11 +978,12 @@ function resumeGame(){
   }
 }
 $('pauseBtn').onclick=pauseGame;
+$('timbreBtn').onclick=()=>{ cfg.timbre={voice:'piano',piano:'both',both:'voice'}[cfg.timbre]; refreshSetup(); if(cfg.timbre!=='piano') loadVoices(); playCurrent(); };
 $('resumeBtn').onclick=resumeGame;
 $('backBtn').onclick=()=>{ paused=false; $('pauseOv').classList.remove('show'); stopDemo(); showCount(0); show('setup'); };
 function playCurrent(){
-  if(cfg.mode==='song'){ const nt=S.notes[S.ni]; if(nt&&!nt.rest) playTone(noteFreq(nt.n),1.2); }
-  else if(target) playTone(target.f,1.4);
+  if(cfg.mode==='song'){ const nt=S.notes[S.ni]; if(nt&&!nt.rest) playNote(nt.n,null,1.2); }
+  else if(target) playNote(SOLFA.indexOf(target),null,1.4);
 }
 $('playRef').onclick=playCurrent;
 $('demoBtn').onclick=()=>{ playDemo(SONGS[cfg.song]); if(cfg.pace==='beat') restartSong(); showCount(0); };

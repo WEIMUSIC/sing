@@ -112,6 +112,9 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 .chip.miss::after{content:'·';position:absolute;top:-14px;right:2px;font-size:26px;color:#f87171}
 .chip .hi{position:absolute;top:3px;font-size:10px}
 .chip .prog{position:absolute;left:8px;right:8px;bottom:6px;height:4px;border-radius:2px;background:#fff;transform-origin:left;transform:scaleX(0)}
+.mini{width:260px;height:16px;border-radius:9px;background:#0006;border:1px solid var(--line);overflow:hidden;position:relative}
+.mini::before{content:'';position:absolute;top:0;bottom:0;left:18%;width:60%;background:#4ade8033}
+.miniFill{height:100%;width:0;background:var(--good);transition:width .06s}
 .count{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:30vh;font-weight:900;color:#ffd36b;text-shadow:0 0 40px #ffb347;pointer-events:none;z-index:8}
 </style>
 </head>
@@ -155,10 +158,19 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
       <button class="opt" data-range="5">Do～Sol</button>
       <button class="opt" data-range="7">Do～Si</button>
     </div>
+    <div class="row pitchOnly" style="display:none"><div class="label">音準要求</div>
+      <button class="opt on" data-tol="70">😊 寬鬆<small>差不多就算對（建議三、四年級）</small></button>
+      <button class="opt" data-tol="50">🙂 標準</button>
+      <button class="opt" data-tol="30">😎 嚴格</button>
+    </div>
     <div class="row"><div class="label">麥克風靈敏度</div>
-      <input type="range" id="sens" min="1" max="20" value="8">
-      <span id="sensVal">8</span>
-      <span class="hint" style="margin:0">（教室吵或麥克風很近→調低；學生聲音太小→調高）</span>
+      <input type="range" id="sens" min="1" max="30" value="10">
+      <span id="sensVal">10</span>
+      <button class="opt" id="calSetup" type="button">🎚 自動校正</button>
+    </div>
+    <div class="row"><div class="label">麥克風測試</div>
+      <div class="mini"><div class="miniFill" id="miniFill"></div></div>
+      <span id="miniInfo" class="hint" style="margin:0">按「自動校正」或「開始治療」後，這裡會顯示聽到的音</span>
     </div>
     <div style="text-align:center">
       <button class="big" id="startBtn">開始治療 ✨</button>
@@ -177,6 +189,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
     <div><select id="songSel2" class="sel" style="display:none;font-size:14px;padding:5px 8px"></select>
          <button class="smallbtn" id="demoBtn" style="display:none">🔊 示範</button>
          <button class="smallbtn" id="playRef" style="display:none">🔊 聽目標音</button>
+         <button class="smallbtn" id="calBtn">🎚 校正音量</button>
          <button class="smallbtn" id="backBtn">⚙ 設定</button></div>
   </div>
   <div class="stage">
@@ -239,6 +252,13 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 </div>
 
 <div class="count" id="count"></div>
+<div class="overlay" id="calOv">
+  <div style="font-size:min(14vh,18vw)">🎚</div>
+  <h2>音量校正</h2>
+  <p id="calText">請全班用<b>平常唱歌</b>的音量，一起唱「啊～」</p>
+  <div class="mini" style="width:min(520px,80vw);height:26px;margin-top:22px"><div class="miniFill" id="calFill"></div></div>
+  <div class="count" id="calCount" style="position:static;display:block;font-size:16vh;margin-top:10px"></div>
+</div>
 <script>
 /* ===== 歌曲資料：沿用「唱名泡泡」 ===== */
 const NAMES=['Do','Re','Mi','Fa','Sol','La','Si'];
@@ -347,11 +367,12 @@ const SOLFA = [
 const PC_NAME = {0:'Do',1:'#Do',2:'Re',3:'#Re',4:'Mi',5:'Fa',6:'#Fa',7:'Sol',8:'#Sol',9:'La',10:'#La',11:'Si'};
 
 /* ===================== 設定 ===================== */
-const cfg = {mode:'choir', len:25, count:5, range:3, sens:8, pace:'wait', speed:0.75, song:null};
+const cfg = {mode:'choir', len:25, count:5, range:3, sens:10, tol:70, pace:'wait', speed:0.75, song:null};
 function refreshSetup(){
   document.getElementById('noteRow').style.display = cfg.mode==='note'?'flex':'none';
   document.querySelectorAll('.songOnly').forEach(r=>r.style.display = cfg.mode==='song'?'flex':'none');
   document.getElementById('speedRow').style.display = cfg.mode==='song'&&cfg.pace==='beat'?'flex':'none';
+  document.querySelectorAll('.pitchOnly').forEach(r=>r.style.display = cfg.mode==='choir'?'none':'flex');
   document.querySelectorAll('.notSong').forEach(r=>r.style.display = cfg.mode==='song'?'none':'flex');
 }
 document.querySelectorAll('.opt').forEach(b=>{
@@ -384,7 +405,8 @@ cfg.song = 0;
 document.getElementById('songSel').onchange = e=>{cfg.song=Number(e.target.value);};
 refreshSetup();
 const sens = document.getElementById('sens');
-sens.oninput = ()=>{cfg.sens=Number(sens.value);document.getElementById('sensVal').textContent=sens.value;};
+function setSens(v){ cfg.sens=v; sens.value=v; document.getElementById('sensVal').textContent=v; }
+sens.oninput = ()=>{ setSens(Number(sens.value)); calFloor=sensToFloor(cfg.sens); try{localStorage.setItem('heal_calFloor',calFloor);}catch(e){} };
 
 /* 音量分區（0~1）*/
 const Z_QUIET = 0.18, Z_LOUD = 0.78;
@@ -414,29 +436,53 @@ async function initMic(){
     micOK = true; return true;
   }catch(e){ console.warn(e); return false; }
 }
-/* 自相關音高偵測，回傳 {freq, clarity} */
+/* 音高偵測（McLeod 方法，對真人聲音和多人齊唱比較寬容） */
 function detectPitch(b, sr){
-  let SIZE=b.length, rms=0;
-  for(let i=0;i<SIZE;i++) rms+=b[i]*b[i];
-  rms=Math.sqrt(rms/SIZE);
-  if(rms<0.008) return {freq:-1,clarity:0,rms};
-  let r1=0,r2=SIZE-1,th=0.2;
-  for(let i=0;i<SIZE/2;i++) if(Math.abs(b[i])<th){r1=i;break;}
-  for(let i=1;i<SIZE/2;i++) if(Math.abs(b[SIZE-i])<th){r2=SIZE-i;break;}
-  const x=b.slice(r1,r2); SIZE=x.length;
-  if(SIZE<200) return {freq:-1,clarity:0,rms};
-  const c=new Float32Array(SIZE);
-  for(let i=0;i<SIZE;i++){let s=0;for(let j=0;j<SIZE-i;j++) s+=x[j]*x[j+i]; c[i]=s;}
-  let d=0; while(d<SIZE-1 && c[d]>c[d+1]) d++;
-  let maxv=-1,maxp=-1;
-  const minLag=Math.floor(sr/1100), maxLag=Math.floor(sr/80);
-  for(let i=Math.max(d,minLag);i<Math.min(SIZE,maxLag);i++) if(c[i]>maxv){maxv=c[i];maxp=i;}
-  if(maxp<1||maxp>=SIZE-1) return {freq:-1,clarity:0,rms};
-  const clarity = maxv/c[0];
-  const a=c[maxp-1],bb=c[maxp],cc=c[maxp+1];
-  const A=(a+cc-2*bb)/2, B=(cc-a)/2;
-  const T0 = A ? maxp - B/(2*A) : maxp;
-  return {freq:sr/T0, clarity, rms};
+  const N=Math.min(b.length,1536);
+  let ss=0; for(let i=0;i<N;i++) ss+=b[i]*b[i];
+  const rms=Math.sqrt(ss/N);
+  if(rms<0.003) return {freq:-1,clarity:0,rms};
+  const minTau=Math.floor(sr/1000), maxTau=Math.min(Math.floor(sr/75), N-2);
+  const nsdf=new Float32Array(maxTau+1);
+  for(let tau=minTau;tau<=maxTau;tau++){
+    let ac=0,m=0;
+    for(let j=0;j<N-tau;j++){ const a=b[j],c=b[j+tau]; ac+=a*c; m+=a*a+c*c; }
+    nsdf[tau]= m>0 ? 2*ac/m : 0;
+  }
+  // 找每段正值區間的最高點
+  const peaks=[]; let pos=false, best=-1, bestV=-1;
+  for(let tau=minTau+1;tau<maxTau;tau++){
+    const v=nsdf[tau];
+    if(!pos && v>0 && nsdf[tau-1]<=0){ pos=true; best=-1; bestV=-1; }
+    if(pos && v>bestV && v>=nsdf[tau-1] && v>=nsdf[tau+1]){ best=tau; bestV=v; }
+    if(pos && v<=0){ pos=false; if(best>0) peaks.push(best); }
+  }
+  if(pos && best>0) peaks.push(best);
+  if(!peaks.length) return {freq:-1,clarity:0,rms};
+  let top=0; peaks.forEach(t=>{ if(nsdf[t]>top) top=nsdf[t]; });
+  const pick=peaks.find(t=>nsdf[t]>=0.88*top);
+  const a=nsdf[pick-1], c0=nsdf[pick], c=nsdf[pick+1];
+  const den=a+c-2*c0, shift= den ? (a-c)/(2*den) : 0;
+  return {freq:sr/(pick+shift), clarity:c0, rms};
+}
+/* 讀麥克風：音量用分貝（dB），比較不會一下子就爆表 */
+let calFloor=-55;   // 這個分貝值＝音量條的 0；再往上 45 dB＝音量條頂端
+try{ const v=localStorage.getItem('heal_calFloor'); if(v!==null) calFloor=Number(v); }catch(e){}
+const sensToFloor = v => -30-(v-1)*2.5;
+const floorToSens = f => Math.max(1,Math.min(30,Math.round((-30-f)/2.5+1)));
+const fHist=[];
+function readMic(){
+  if(!micOK) return {level:0,freq:-1,clarity:0,db:-100};
+  analyser.getFloatTimeDomainData(buf);
+  const p=detectPitch(buf, actx.sampleRate);
+  const db = p.rms>0 ? 20*Math.log10(p.rms) : -100;
+  const level=Math.max(0,Math.min(1,(db-calFloor)/45));
+  // 音高取最近 5 次的中位數，比較穩
+  let freq=-1;
+  if(p.clarity>=0.55 && p.freq>75 && p.freq<1000){ fHist.push(p.freq); if(fHist.length>5) fHist.shift();
+    freq=[...fHist].sort((x,y)=>x-y)[Math.floor(fHist.length/2)]; }
+  else fHist.length=0;
+  return {level, freq, clarity:p.clarity, db};
 }
 function playTone(f, dur=1.2){
   if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
@@ -584,24 +630,61 @@ function newTarget(){
 }
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('show'));$(id).classList.add('show');}
 
+/* ===================== 自動校正 ===================== */
+const cal={on:false,t:0,dbs:[],back:null};
+async function startCal(back){
+  const ok=await initMic();
+  if(!ok){ $('err').textContent='⚠ 抓不到麥克風，無法校正。'; return; }
+  stopDemo();
+  cal.on=true; cal.t=-1.5; cal.dbs=[]; cal.back=back;
+  $('calText').innerHTML='請全班用<b>平常唱歌</b>的音量，一起唱「啊～」（不要喊）';
+  $('calOv').classList.add('show');
+}
+function calStep(dt){
+  cal.t+=dt;
+  const m=readMic();
+  $('calFill').style.width=(m.level*100)+'%';
+  if(cal.t<0){ $('calCount').textContent='準備'; return; }
+  $('calCount').textContent = cal.t<3 ? (3-Math.floor(cal.t)) : '✔';
+  if(m.db>-70) cal.dbs.push(m.db);
+  if(cal.t>=3){
+    cal.on=false;
+    const d=cal.dbs.sort((a,b)=>a-b);
+    if(d.length<20 || d[Math.floor(d.length*0.6)]<-65){
+      $('calText').textContent='沒有聽到歌聲，請檢查麥克風後再試一次。';
+    } else {
+      const loud=d[Math.floor(d.length*0.6)];          // 取比較有在唱的那段
+      calFloor = loud - 0.48*45;                         // 平常唱歌＝綠色區中間
+      try{localStorage.setItem('heal_calFloor',calFloor);}catch(e){}
+      setSens(floorToSens(calFloor));
+      $('calText').textContent='校正完成！平常唱歌的音量已經設在綠色區中間 👍';
+    }
+    setTimeout(()=>{ $('calOv').classList.remove('show'); if(cal.back) cal.back(); },1600);
+  }
+}
+$('calSetup').onclick=()=>startCal(null);
+$('calBtn').onclick=()=>startCal(()=>{ if(cfg.mode==='song') restartSong(); });
+
 /* ===================== 主迴圈 ===================== */
 let last=0;
 function loop(now){
   const dt = Math.min(.1,(now-last)/1000); last=now;
-  if($('game').classList.contains('show') && !$('healOv').classList.contains('show') && !$('endOv').classList.contains('show')){
+  if(cal.on) calStep(dt);
+  else if($('setup').classList.contains('show') && micOK){
+    const m=readMic();
+    $('miniFill').style.width=(m.level*100)+'%';
+    $('miniFill').style.background = m.level>Z_LOUD?'var(--bad)':(m.level>Z_QUIET?'var(--good)':'#ffffff66');
+    if(m.freq>0){ const r=Math.round(69+12*Math.log2(m.freq/440)); $('miniInfo').textContent=`聽到：${PC_NAME[((r%12)+12)%12]}　（正常唱歌時，音量條應該在綠色區）`; }
+    else $('miniInfo').textContent= m.level>0.05 ? '有聲音，但聽不出音高（說話、拍手、雜音）' : '安靜中…';
+  }
+  else if($('game').classList.contains('show') && !$('calOv').classList.contains('show') && !$('healOv').classList.contains('show') && !$('endOv').classList.contains('show')){
     step(dt, now);
   }
   requestAnimationFrame(loop);
 }
 function step(dt, now){
   // ---- 讀取聲音 ----
-  let level=0, freq=-1, clarity=0;
-  if(micOK){
-    analyser.getFloatTimeDomainData(buf);
-    const p = detectPitch(buf, actx.sampleRate);
-    level = Math.min(1, p.rms*cfg.sens*4);
-    freq=p.freq; clarity=p.clarity;
-  }
+  let {level, freq, clarity} = readMic();
   // 示範播放中：不計分（避免麥克風收到喇叭聲）
   if(actx && demoUntil>actx.currentTime){
     $('msg').textContent='🔊 示範中，請仔細聽…'; $('msg').style.color='#9be7ff';
@@ -624,7 +707,7 @@ function step(dt, now){
   }
   smoothLv += (level-smoothLv)*0.35;
   const lv = smoothLv;
-  const singing = clarity>0.85 && freq>80 && freq<1100;   // 有清楚音高＝在唱歌，不是噪音/拍手
+  const singing = freq>0;   // 有清楚音高＝在唱歌，不是噪音/拍手
 
   // ---- 音量表 ----
   $('vfill').style.height = `calc(${lv*100}% - 12px)`;
@@ -646,7 +729,7 @@ function step(dt, now){
       const midi=69+12*Math.log2(freq/440);
       let diff=((midi-(60+tpc))%12+12)%12; if(diff>6) diff-=12;   // 八度無關
       cents=diff*100;
-      state = Math.abs(cents)<=45 ? 'good' : 'off';
+      state = Math.abs(cents)<=cfg.tol ? 'good' : 'off';
     }
   } else if(state!=='loud' && lv>0.05 && lv<=Z_QUIET && singing){ state='quiet'; }
 
@@ -817,6 +900,8 @@ addEventListener('keydown',e=>{
   if(e.key==='Escape'){ stopDemo(); showCount(0);$('healOv').classList.remove('show'); $('endOv').classList.remove('show'); show('setup'); }
 });
 addEventListener('keyup',e=>{ if(e.code==='Space') spaceDown=false; });
+setSens(floorToSens(calFloor));
+running=true; last=performance.now(); requestAnimationFrame(loop);
 </script>
 </body>
 </html>

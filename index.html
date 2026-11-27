@@ -49,6 +49,9 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 .top{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px}
 .healed{display:flex;gap:6px;font-size:clamp(22px,2.6vw,34px)}
 .healed span{filter:grayscale(1) opacity(.35);transition:.4s}
+.healed img{height:clamp(34px,5.5vh,54px);display:block}
+.beast img{height:100%;width:auto;display:block;pointer-events:none}
+img.tiny{height:1.6em;vertical-align:middle}
 .healed span.done{filter:none}
 .timer{font-size:clamp(18px,2vw,26px);font-weight:700;opacity:.9}
 .smallbtn{font:inherit;background:var(--card);border:1px solid var(--line);color:#fff;border-radius:12px;padding:6px 12px;cursor:pointer;font-size:14px}
@@ -67,10 +70,10 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;height:100%}
 .cname{font-size:clamp(26px,3.4vw,44px);font-weight:900}
 .story{font-size:clamp(15px,1.7vw,21px);opacity:.85;margin:.3em 0 1em;text-align:center;max-width:640px}
-.beastbox{position:relative;width:min(42vh,38vw);height:min(42vh,38vw);display:flex;align-items:center;justify-content:center}
+.beastbox{position:relative;height:min(46vh,62vw);aspect-ratio:300/488;display:flex;align-items:center;justify-content:center}
 .aura{position:absolute;inset:-6%;border-radius:50%;
   background:radial-gradient(circle,rgba(255,220,120,.55) 0%,rgba(255,150,200,.25) 40%,transparent 70%);opacity:0;transition:opacity .3s}
-.beast{font-size:min(30vh,27vw);line-height:1;transition:filter .3s;user-select:none}
+.beast{height:100%;line-height:1;transition:filter .3s;user-select:none}
 .bandage{position:absolute;font-size:min(9vh,8vw);transition:opacity .6s,transform .6s}
 .mood{position:absolute;top:-4%;right:-2%;font-size:min(8vh,7vw);transition:.3s}
 .beast.shake{animation:shake .35s linear infinite}
@@ -99,7 +102,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 /* overlay */
 .overlay{position:fixed;inset:0;background:#0b1030dd;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:10;text-align:center;padding:20px}
 .overlay.show{display:flex}
-.overlay .beast{font-size:min(34vh,40vw)}
+.overlay .beast{height:min(42vh,60vw)}
 .overlay h2{font-size:clamp(30px,4.4vw,56px);font-weight:900;color:var(--gold);margin:.3em 0}
 .overlay p{font-size:clamp(17px,2vw,24px);opacity:.9}
 .summary{margin-top:14px;font-size:20px;line-height:1.9}
@@ -162,6 +165,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
       <button class="opt" data-count="3">3 隻</button>
       <button class="opt on" data-count="5">5 隻</button>
       <button class="opt" data-count="7">7 隻</button>
+      <button class="opt" data-count="10">10 隻（全部）</button>
     </div>
     <div class="row" id="noteRow" style="display:none"><div class="label">唱名範圍</div>
       <button class="opt on" data-range="3">Do Re Mi</button>
@@ -265,7 +269,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 
 <div class="count" id="count"></div>
 <div class="overlay" id="pauseOv">
-  <div class="beast" id="pauseBeast" style="font-size:min(26vh,30vw);animation:snooze 2.4s ease-in-out infinite"></div>
+  <div class="beast" id="pauseBeast" style="height:min(36vh,50vw);animation:snooze 2.4s ease-in-out infinite"></div>
   <div style="font-size:min(8vh,10vw);margin-top:-2vh">💤</div>
   <h2>休息一下 ☕</h2>
   <p>神獸也在睡午覺，喝口水、深呼吸～</p>
@@ -370,16 +374,19 @@ let customs=[];try{customs=JSON.parse(localStorage.getItem('bubble_customs')||'[
 <script>
 /* ===================== 資料 ===================== */
 const BEASTS = [
-  {e:'🦄', n:'小麒麟',   s:'在雷雨中迷路，蹄子受傷了…', thx:'小麒麟踏著彩虹回家了！'},
-  {e:'🐉', n:'青龍寶寶', s:'飛太快撞到山壁，鱗片掉了好幾片…', thx:'青龍寶寶又能在雲裡翻滾了！'},
-  {e:'🐢', n:'玄武爺爺', s:'殼上裂了一道縫，好痛喔…', thx:'玄武爺爺的殼變得又亮又硬！'},
-  {e:'🦚', n:'鳳凰姊姊', s:'羽毛被冷風吹得失去了光彩…', thx:'鳳凰姊姊重新展開金色的翅膀！'},
-  {e:'🐯', n:'白虎弟弟', s:'追蝴蝶時扭到了腳…', thx:'白虎弟弟又能在森林裡奔跑了！'},
-  {e:'🦌', n:'月光小鹿', s:'鹿角被樹枝勾到，折了一角…', thx:'月光小鹿的鹿角發出溫柔的光！'},
-  {e:'🦊', n:'九尾小狐', s:'尾巴被荊棘刮傷，只剩八條在發亮…', thx:'九條尾巴全都亮起來了！'},
-  {e:'🐋', n:'星海鯨魚', s:'被漁網纏住，游不動了…', thx:'星海鯨魚噴出一道彩虹水柱！'},
-  {e:'🦉', n:'智慧貓頭鷹', s:'熬夜太久，眼睛睜不開了…', thx:'貓頭鷹睜大眼睛說：謝謝你們！'},
+  {img:1,  n:'雲朵小狗・笛笛', s:'直笛摔了一跤，吹出來的聲音都破掉了…', thx:'笛笛又吹出清亮的笛聲了！'},
+  {img:2,  n:'小號貓咪・叭叭', s:'吹小號太用力，喉嚨好痛、發不出聲音…', thx:'叭叭吹出了閃亮的勝利號角！'},
+  {img:3,  n:'高音兔・譜譜',   s:'魔法高音譜號被風吹走了，耳朵聽不見音樂…', thx:'譜譜找回高音譜號，耳朵豎得好高！'},
+  {img:4,  n:'鈴鼓熊貓・鈴鈴', s:'鈴鼓上的小鈴鐺全掉光了，搖不出聲音…', thx:'鈴鈴的鈴鼓又叮叮噹噹響起來了！'},
+  {img:5,  n:'提琴狐狸・琴琴', s:'小提琴的弦斷了一根，心情好低落…', thx:'琴琴拉出了好溫柔的旋律！'},
+  {img:6,  n:'星星企鵝・閃閃', s:'魔法星星棒沒電了，小翅膀也凍僵了…', thx:'閃閃的星星棒又發出亮晶晶的光！'},
+  {img:7,  n:'鐵琴刺蝟・叮叮', s:'鐵琴的音板亂成一團，敲不出 Do Re Mi…', thx:'叮叮敲出了一整排彩虹音階！'},
+  {img:8,  n:'小鼓綿羊・咚咚', s:'鼓棒弄丟了一支，打不出穩穩的拍子…', thx:'咚咚又打出穩穩的節奏了！'},
+  {img:9,  n:'彩虹天馬・虹虹', s:'翅膀被暴風雨淋濕，飛不起來了…', thx:'虹虹展開翅膀，飛上了彩虹！'},
+  {img:10, n:'星光小雞・啾啾', s:'抱著的星星失去光芒，啾啾好怕黑…', thx:'星星重新亮起來，啾啾開心地唱歌！'},
 ];
+const beastImg = (b,cls='') => `<img class="${cls}" src="beasts/${b.img}.webp" alt="${b.n}" draggable="false">`;
+
 const SOLFA = [
   {n:'Do', pc:0, f:261.63},{n:'Re', pc:2, f:293.66},{n:'Mi', pc:4, f:329.63},
   {n:'Fa', pc:5, f:349.23},{n:'Sol',pc:7, f:392.00},{n:'La', pc:9, f:440.00},{n:'Si', pc:11,f:493.88}
@@ -664,7 +671,7 @@ $('startBtn').onclick = async ()=>{
 function startGame(){
   lineup = shuffle(BEASTS.slice()).slice(0,cfg.count);
   idx=0; results=[];
-  $('healedRow').innerHTML = lineup.map(b=>`<span>${b.e}</span>`).join('');
+  $('healedRow').innerHTML = lineup.map(b=>`<span>${beastImg(b)}</span>`).join('');
   const isNote = cfg.mode==='note', isSong = cfg.mode==='song';
   $('noteBox').style.display = (isNote||isSong)?'block':'none';
   $('noteBox').querySelector('h3').textContent = isSong?'現在要唱':'請唱這個音';
@@ -690,7 +697,7 @@ function startGame(){
 function loadBeast(){
   const b = lineup[idx];
   energy=0; streak=0; loudTime=0; targetGain=0;
-  $('beast').textContent=b.e; $('cname').textContent=b.n; $('story').textContent=b.s;
+  $('beast').innerHTML=beastImg(b); $('cname').textContent=b.n; $('story').textContent=b.s;
   $('beast').className='beast';
   $('msg').textContent='準備好就開始唱吧！'; $('msg').style.color='#fff';
   if(cfg.mode==='note') newTarget();
@@ -938,7 +945,7 @@ function healed(now){
   const b=lineup[idx], secs=(now-tBeast)/1000;
   results.push({b,secs});
   $('healedRow').children[idx].classList.add('done');
-  $('ovBeast').textContent=b.e;
+  $('ovBeast').innerHTML=beastImg(b);
   $('ovTitle').textContent=`${b.n} 康復了！`;
   $('ovText').textContent=`${b.thx}（用了 ${secs.toFixed(1)} 秒）`;
   $('nextBtn').textContent = idx<lineup.length-1 ? '下一隻神獸 ➜' : '看治療成果 🏆';
@@ -951,7 +958,7 @@ $('nextBtn').onclick=()=>{
   if(idx<lineup.length) loadBeast();
   else{
     const total=results.reduce((s,r)=>s+r.secs,0);
-    $('summary').innerHTML = results.map(r=>`${r.b.e} ${r.b.n}：${r.secs.toFixed(1)} 秒`).join('<br>')
+    $('summary').innerHTML = results.map(r=>`${beastImg(r.b,'tiny')} ${r.b.n}：${r.secs.toFixed(1)} 秒`).join('<br>')
       + `<br><b style="color:var(--gold)">總治療時間：${total.toFixed(1)} 秒</b>`;
     $('endOv').classList.add('show'); chime();
   }
@@ -962,7 +969,7 @@ let paused=false, pauseAt=0;
 function pauseGame(){
   if(paused || !$('game').classList.contains('show') || $('healOv').classList.contains('show') || $('endOv').classList.contains('show') || cal.on) return;
   paused=true; pauseAt=performance.now(); stopDemo(); showCount(0);
-  $('pauseBeast').textContent=lineup[idx].e;
+  $('pauseBeast').innerHTML=beastImg(lineup[idx]);
   $('pauseBeast').style.filter=$('beast').style.filter;
   $('pauseInfo').textContent=`${lineup[idx].n} 目前恢復了 ${Math.floor(energy)}%`;
   $('pauseOv').classList.add('show');

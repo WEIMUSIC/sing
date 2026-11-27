@@ -144,9 +144,9 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
       <button class="opt" data-speed="1">原速</button>
     </div>
     <div class="row notSong"><div class="label">治療時間</div>
-      <button class="opt" data-len="12">短<small>約 12 秒/隻</small></button>
-      <button class="opt on" data-len="25">中<small>約 25 秒/隻</small></button>
-      <button class="opt" data-len="45">長<small>約 45 秒/隻</small></button>
+      <button class="opt" data-len="8">短<small>約 8 秒/隻</small></button>
+      <button class="opt on" data-len="15">中<small>約 15 秒/隻</small></button>
+      <button class="opt" data-len="30">長<small>約 30 秒/隻</small></button>
     </div>
     <div class="row"><div class="label">神獸數量</div>
       <button class="opt" data-count="3">3 隻</button>
@@ -159,9 +159,9 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
       <button class="opt" data-range="7">Do～Si</button>
     </div>
     <div class="row pitchOnly" style="display:none"><div class="label">音準要求</div>
-      <button class="opt on" data-tol="70">😊 寬鬆<small>差不多就算對（建議三、四年級）</small></button>
-      <button class="opt" data-tol="50">🙂 標準</button>
-      <button class="opt" data-tol="30">😎 嚴格</button>
+      <button class="opt on" data-tol="90">😊 寬鬆<small>差不多就算對（建議三、四年級）</small></button>
+      <button class="opt" data-tol="60">🙂 標準</button>
+      <button class="opt" data-tol="35">😎 嚴格</button>
     </div>
     <div class="row"><div class="label">麥克風靈敏度</div>
       <input type="range" id="sens" min="1" max="30" value="10">
@@ -367,7 +367,7 @@ const SOLFA = [
 const PC_NAME = {0:'Do',1:'#Do',2:'Re',3:'#Re',4:'Mi',5:'Fa',6:'#Fa',7:'Sol',8:'#Sol',9:'La',10:'#La',11:'Si'};
 
 /* ===================== 設定 ===================== */
-const cfg = {mode:'choir', len:25, count:5, range:3, sens:10, tol:70, pace:'wait', speed:0.75, song:null};
+const cfg = {mode:'choir', len:15, count:5, range:3, sens:10, tol:90, pace:'wait', speed:0.75, song:null};
 function refreshSetup(){
   document.getElementById('noteRow').style.display = cfg.mode==='note'?'flex':'none';
   document.querySelectorAll('.songOnly').forEach(r=>r.style.display = cfg.mode==='song'?'flex':'none');
@@ -409,7 +409,7 @@ function setSens(v){ cfg.sens=v; sens.value=v; document.getElementById('sensVal'
 sens.oninput = ()=>{ setSens(Number(sens.value)); calFloor=sensToFloor(cfg.sens); try{localStorage.setItem('heal_calFloor',calFloor);}catch(e){} };
 
 /* 音量分區（0~1）*/
-const Z_QUIET = 0.18, Z_LOUD = 0.78;
+const Z_QUIET = 0.12, Z_LOUD = 0.85;
 function layoutMeter(){
   const pad = 0; // %
   document.getElementById('zLoud').style.height = (1-Z_LOUD)*100+'%';
@@ -479,7 +479,7 @@ function readMic(){
   const level=Math.max(0,Math.min(1,(db-calFloor)/45));
   // 音高取最近 5 次的中位數，比較穩
   let freq=-1;
-  if(p.clarity>=0.55 && p.freq>75 && p.freq<1000){ fHist.push(p.freq); if(fHist.length>5) fHist.shift();
+  if(p.clarity>=0.45 && p.freq>75 && p.freq<1000){ fHist.push(p.freq); if(fHist.length>5) fHist.shift();
     freq=[...fHist].sort((x,y)=>x-y)[Math.floor(fHist.length/2)]; }
   else fHist.length=0;
   return {level, freq, clarity:p.clarity, db};
@@ -718,7 +718,7 @@ function step(dt, now){
   if(singing){ const midi=69+12*Math.log2(freq/440); const r=Math.round(midi); detName=PC_NAME[((r%12)+12)%12]; }
   if(lv>Z_LOUD){
     loudTime+=dt;
-    if(loudTime>0.4) state='loud';
+    if(loudTime>1.0) state='loud';   // 連續大聲 1 秒才算吼叫
   } else loudTime=Math.max(0,loudTime-dt*2);
 
   if(state!=='loud' && lv>Z_QUIET && singing){
@@ -740,7 +740,8 @@ function step(dt, now){
   } else {
     const rate = 100/cfg.len;                    // %/秒
     if(state==='good') gain = rate*mult*dt;
-    if(state==='loud') gain = -rate*0.4*dt;      // 嚇到：能量流失
+    if(state==='off' || state==='quiet') gain = rate*0.4*dt;   // 有在唱但不夠準／小聲：也給一些能量
+    // 太大聲：不加能量，但也不扣
     energy = Math.max(0, Math.min(100, energy+gain));
   }
 
@@ -781,7 +782,7 @@ function step(dt, now){
   render();
   if(energy>=100) healed(now);
 }
-const HOLD=0.45;   // 慢慢練：唱準多久算過關（秒）
+const HOLD=0.3;    // 慢慢練：唱準多久算過關（秒）
 function songStep(dt, state){
   if(S.phase!=='play') return;
   const nt=S.notes[S.ni];
@@ -789,8 +790,7 @@ function songStep(dt, state){
   const ch=$('stripIn').children;
   if(cfg.pace==='wait'){
     if(state==='good'){ S.hold+=dt; }
-    else if(state==='loud'){ S.hold=0; }
-    else S.hold=Math.max(0,S.hold-dt*0.5);
+    else if(state!=='loud') S.hold=Math.max(0,S.hold-dt*0.2);
     setProg(S.ni, S.hold/HOLD);
     if(S.hold>=HOLD){
       energy=Math.min(100,energy+S.share[S.ni]);
@@ -804,11 +804,10 @@ function songStep(dt, state){
   const dur=nt.beats*S.beatSec;
   S.t+=dt;
   if(!nt.rest){
-    if(state==='good'){
-      const g=Math.min(S.share[S.ni]-S.gain[S.ni], S.share[S.ni]/(dur*0.6)*dt);
+    if(state==='good' || state==='off' || state==='quiet'){
+      const g=(state==='good'?1:0.4)*Math.min(S.share[S.ni]-S.gain[S.ni], S.share[S.ni]/(dur*0.35)*dt);
       if(g>0){ S.gain[S.ni]+=g; energy=Math.min(100,energy+g); }
     }
-    if(state==='loud') energy=Math.max(0,energy-(100/(S.totalBeats*S.beatSec))*0.3*dt);
     setProg(S.ni, S.t/dur);
   }
   if(S.t>=dur){

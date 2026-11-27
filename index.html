@@ -55,16 +55,38 @@ img.tiny{height:1.6em;vertical-align:middle}
 .healed span.done{filter:none}
 .timer{font-size:clamp(18px,2vw,26px);font-weight:700;opacity:.9}
 .smallbtn{font:inherit;background:var(--card);border:1px solid var(--line);color:#fff;border-radius:12px;padding:6px 12px;cursor:pointer;font-size:14px}
-.stage{flex:1;width:100%;display:grid;grid-template-columns:110px 1fr 220px;gap:2vw;align-items:center;min-height:0}
+.stage{flex:1;width:100%;display:grid;grid-template-columns:150px 1fr 290px;gap:2vw;align-items:center;min-height:0}
 /* volume meter */
-.meterwrap{height:62vh;display:flex;flex-direction:column;align-items:center;gap:8px}
-.meter{position:relative;flex:1;width:56px;border-radius:30px;background:#0006;border:2px solid var(--line);overflow:hidden}
+.meterwrap{height:74vh;display:flex;flex-direction:column;align-items:center;gap:6px}
+.vface{font-size:clamp(44px,6vh,64px);line-height:1;transition:transform .15s}
+.vlabel{font-size:clamp(18px,2.6vh,26px);font-weight:900;padding:2px 12px;border-radius:999px;background:#0005;min-width:120px;text-align:center}
+.meter{position:relative;flex:1;width:110px;border-radius:24px;background:#0008;border:3px solid #ffffff55;overflow:hidden}
 .zone{position:absolute;left:0;right:0}
-.zone.loud{top:0;background:#f8717133}
-.zone.good{background:#4ade8033}
-.zone.quiet{bottom:0;background:#ffffff0d}
-.fill{position:absolute;left:6px;right:6px;bottom:6px;border-radius:24px;background:var(--good);transition:height .06s,background .2s}
-.meter .tag{position:absolute;right:-2px;left:-2px;text-align:center;font-size:11px;opacity:.8;pointer-events:none}
+.zone.loud{top:0;background:#f8717166;border-bottom:3px dashed #fca5a5}
+.zone.good{background:#4ade8040;border-bottom:3px dashed #86efac}
+.zone.quiet{bottom:0;background:#94a3b826}
+.fill{position:absolute;left:10px;right:10px;bottom:6px;border-radius:16px;background:var(--good);transition:height .06s,background .2s;opacity:.9}
+.meter .tag{position:absolute;right:0;left:0;text-align:center;font-size:clamp(14px,2vh,19px);font-weight:900;line-height:1.25;pointer-events:none;text-shadow:0 1px 3px #000,0 0 8px #000}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:7;box-shadow:inset 0 0 0 0 transparent;transition:box-shadow .2s}
+body.tooLoud .vignette{box-shadow:inset 0 0 160px 40px rgba(248,113,113,.75);animation:pulse .5s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:.6}to{opacity:1}}
+.loudAlert{position:fixed;top:12vh;left:50%;transform:translateX(-50%) scale(.6);opacity:0;z-index:9;pointer-events:none;
+  font-size:clamp(28px,4.4vw,58px);font-weight:900;color:#fff;background:#dc2626;padding:10px 34px;border-radius:999px;box-shadow:0 8px 40px #dc262699;transition:.18s}
+body.tooLoud .loudAlert{opacity:1;transform:translateX(-50%) scale(1)}
+.pitchbox{padding:10px 12px}
+.pitchbox h3{margin:0}
+.ladder{position:relative;height:44vh;margin:6px 0 4px;border-radius:14px;background:#0006;overflow:hidden}
+.rung{position:absolute;left:0;right:0;height:0;border-top:2px solid #ffffff30}
+.rung span{position:absolute;left:8px;top:-12px;font-size:16px;font-weight:700;opacity:.7}
+.rung.tgt{border:none;background:rgba(255,211,107,.28);border-top:2px solid #ffd36b;border-bottom:2px solid #ffd36b}
+.rung.tgt span{opacity:1;color:#ffd36b;font-size:20px;font-weight:900;top:50%;transform:translateY(-50%)}
+.ball{position:absolute;right:16%;width:60px;height:60px;margin-top:-30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;
+  background:#64748b;border:4px solid #fff;box-shadow:0 0 16px #0008;transition:top .09s linear,background .15s,opacity .2s;top:50%;opacity:.25}
+.ball.ok{background:#22c55e;box-shadow:0 0 26px #4ade80}
+.ball.near{background:#eab308}
+.ball.far{background:#ef4444}
+.hl{position:absolute;right:8px;font-size:15px;font-weight:900;opacity:.75;background:#0007;padding:1px 8px;border-radius:8px}
+.pverdict{font-size:clamp(20px,2.8vh,30px);font-weight:900;min-height:1.4em;line-height:1.3}
 .meterlabel{font-size:14px;font-weight:700}
 /* creature */
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;height:100%}
@@ -210,14 +232,16 @@ img.tiny{height:1.6em;vertical-align:middle}
   </div>
   <div class="stage">
     <div class="meterwrap">
-      <div class="meterlabel">音量</div>
+      <div class="vface" id="vface">🤫</div>
+      <div class="vlabel" id="vlabel">音量</div>
       <div class="meter" id="meter">
         <div class="zone loud" id="zLoud"></div>
         <div class="zone good" id="zGood"></div>
         <div class="zone quiet" id="zQuiet"></div>
-        <div class="tag" id="tLoud">太大聲</div>
-        <div class="tag" id="tGood">剛剛好</div>
         <div class="fill" id="vfill"></div>
+        <div class="tag" id="tLoud">😱<br>太大聲</div>
+        <div class="tag" id="tGood">😊<br>剛剛好</div>
+        <div class="tag" id="tQuiet">🤫<br>太小聲</div>
       </div>
     </div>
     <div class="center">
@@ -236,13 +260,12 @@ img.tiny{height:1.6em;vertical-align:middle}
       <div class="strip" id="strip" style="display:none"><div class="stripIn" id="stripIn"></div></div>
     </div>
     <div class="side">
-      <div class="sidebox" id="noteBox" style="display:none">
-        <h3>請唱這個音</h3>
+      <div class="sidebox pitchbox" id="noteBox" style="display:none">
+        <h3>請唱</h3>
         <div class="target" id="target">Do</div>
-        <h3 style="margin-top:10px">現在聽到</h3>
-        <div class="detected" id="detected">—</div>
-        <div class="tuner"><div class="needle" id="needle"></div></div>
-        <div class="tip" style="margin-top:6px">指針在綠色中間＝唱準了！</div>
+        <div class="ladder" id="ladder"><div class="rungs" id="rungs"></div><div class="ball" id="ball">🎤</div></div>
+        <div class="pverdict" id="pverdict">🎤 唱出聲音來～</div>
+        <div class="detected" id="detected" style="display:none">—</div>
       </div>
       <div class="sidebox">
         <h3>治療秘訣</h3>
@@ -268,6 +291,8 @@ img.tiny{height:1.6em;vertical-align:middle}
 </div>
 
 <div class="count" id="count"></div>
+<div class="vignette" id="vignette"></div>
+<div class="loudAlert" id="loudAlert">😱 太大聲了！小聲一點～</div>
 <div class="overlay" id="pauseOv">
   <div class="beast" id="pauseBeast" style="height:min(36vh,50vw);animation:snooze 2.4s ease-in-out infinite"></div>
   <div style="font-size:min(8vh,10vw);margin-top:-2vh">💤</div>
@@ -447,8 +472,9 @@ function layoutMeter(){
   const g = document.getElementById('zGood');
   g.style.bottom = Z_QUIET*100+'%'; g.style.height = (Z_LOUD-Z_QUIET)*100+'%';
   document.getElementById('zQuiet').style.height = Z_QUIET*100+'%';
-  document.getElementById('tLoud').style.top = ((1-Z_LOUD)/2*100-3)+'%';
-  document.getElementById('tGood').style.top = ((1-(Z_LOUD+Z_QUIET)/2)*100-3)+'%';
+  document.getElementById('tLoud').style.top = ((1-Z_LOUD)/2*100-5)+'%';
+  document.getElementById('tGood').style.top = ((1-(Z_LOUD+Z_QUIET)/2)*100-5)+'%';
+  document.getElementById('tQuiet').style.bottom = '4px';
 }
 layoutMeter();
 
@@ -753,6 +779,7 @@ $('calBtn').onclick=()=>startCal(()=>{ if(cfg.mode==='song') restartSong(); });
 let last=0;
 function loop(now){
   const dt = Math.min(.1,(now-last)/1000); last=now;
+  if(!$('game').classList.contains('show') || paused || $('healOv').classList.contains('show') || $('endOv').classList.contains('show') || cal.on) document.body.classList.remove('tooLoud');
   if(cal.on) calStep(dt);
   else if($('setup').classList.contains('show') && micOK){
     const m=readMic();
@@ -772,7 +799,7 @@ function step(dt, now){
   // 示範播放中：不計分（避免麥克風收到喇叭聲）
   if(actx && demoUntil>actx.currentTime){
     $('msg').textContent='🔊 示範中，請仔細聽…'; $('msg').style.color='#9be7ff';
-    $('vfill').style.height='0'; $('timer').textContent='⏱ 示範中'; return;
+    $('vfill').style.height='0'; $('timer').textContent='⏱ 示範中'; document.body.classList.remove('tooLoud'); return;
   }
   // 歌曲：決定「現在要唱的音」
   let songPc=null;
@@ -796,6 +823,10 @@ function step(dt, now){
   // ---- 音量表 ----
   $('vfill').style.height = `calc(${lv*100}% - 12px)`;
   $('vfill').style.background = lv>Z_LOUD?'var(--bad)':(lv>Z_QUIET?'var(--good)':'#ffffff66');
+  const vz = lv>Z_LOUD ? 'loud' : (lv>Z_QUIET ? 'good' : (lv>0.04 ? 'quiet' : 'none'));
+  $('vface').textContent = {loud:'😱',good:'😊',quiet:'🤫',none:'😶'}[vz];
+  $('vlabel').textContent = {loud:'太大聲！',good:'剛剛好',quiet:'太小聲',none:'音量'}[vz];
+  $('vlabel').style.background = {loud:'#dc2626',good:'#16a34a',quiet:'#475569',none:'#0005'}[vz];
 
   // ---- 判斷 ----
   let gain=0, state='idle', cents=null, detName='—';
@@ -817,6 +848,7 @@ function step(dt, now){
     }
   } else if(state!=='loud' && lv>0.05 && lv<=Z_QUIET && singing){ state='quiet'; }
 
+  document.body.classList.toggle('tooLoud', loudTime>0.3);   // 畫面警告比扣分早一點出現
   if(state==='good'){ streak+=dt; } else streak=Math.max(0,streak-dt*1.5);
   const mult = 1 + Math.min(streak,4)/8;      // 穩定長音最多 1.5 倍
   if(cfg.mode==='song'){
@@ -857,9 +889,23 @@ function step(dt, now){
   if(cfg.mode==='note' || cfg.mode==='song'){
     const tpc = cfg.mode==='song' ? songPc : (target?target.pc:null);
     $('detected').textContent = singing && lv>0.05 ? detName : '—';
-    let c=0;
-    if(singing && tpc!==null){ const midi=69+12*Math.log2(freq/440); let d=((midi-(60+tpc))%12+12)%12; if(d>6)d-=12; c=Math.max(-1,Math.min(1,d*100/150)); }
-    $('needle').style.left = `calc(${50+c*48}% - 2px)`;
+    drawLadder(tpc);
+    const ball=$('ball'), pv=$('pverdict');
+    if(tpc===null){ ball.style.opacity=.25; ball.className='ball'; pv.textContent=S.phase==='count'?'準備…':'休息～'; pv.style.color='#9be7ff'; }
+    else if(singing && lv>0.05){
+      const midi=69+12*Math.log2(freq/440); let d=((midi-(60+tpc))%12+12)%12; if(d>6)d-=12;   // 半音數，八度無關
+      const cc=d*100, a=Math.abs(cc);
+      ball.style.top = ladderY(Math.max(-5.6,Math.min(5.6,d)))+'%'; ball.style.opacity=1;
+      ball.className = 'ball ' + (a<=cfg.tol ? 'ok' : (a<=cfg.tol+80 ? 'near' : 'far'));
+      ball.textContent = a<=cfg.tol ? '😊' : '🎤';
+      if(state==='loud'){ pv.textContent='😱 太大聲了'; pv.style.color='#fca5a5'; }
+      else if(a<=cfg.tol){ pv.textContent='✔ 唱準了！'; pv.style.color='#4ade80'; }
+      else if(cc<0){ pv.textContent='⬆ 再高一點'; pv.style.color='#facc15'; }
+      else { pv.textContent='⬇ 再低一點'; pv.style.color='#facc15'; }
+    } else {
+      ball.style.opacity=.25; ball.className='ball'; ball.textContent='🎤';
+      pv.textContent='🎤 唱出聲音來～'; pv.style.color='#fff';
+    }
   }
 
   $('timer').textContent = `⏱ ${((now-tBeast)/1000).toFixed(1)} 秒`;
@@ -910,6 +956,26 @@ function showCount(n){
   if(!n){ c.style.display='none'; return; }
   c.textContent=n; c.style.display='flex';
   c.animate([{transform:'scale(1.5)',opacity:0},{transform:'scale(1)',opacity:1}],{duration:250});
+}
+/* ---- 音高梯子：目標音在正中間，上下各 5 個半音 ---- */
+const SCALE_PC=[0,2,4,5,7,9,11];
+const ladderY = rel => 50 - rel*(100/12);          // rel：比目標高幾個半音
+let ladderPc=-1, ladderTol=-1;
+function drawLadder(tpc){
+  if(tpc===null || (tpc===ladderPc && cfg.tol===ladderTol)) return;
+  ladderPc=tpc; ladderTol=cfg.tol;
+  let h='';
+  for(let r=-5;r<=5;r++){
+    const pc=((tpc+r)%12+12)%12;
+    if(r===0){
+      const band=cfg.tol/100*(100/12);           // 容許範圍畫成金色帶
+      h+=`<div class="rung tgt" style="top:${50-band}%;height:${band*2}%"><span>${PC_NAME[pc]} ★</span></div>`;
+    } else if(SCALE_PC.includes(pc)){
+      h+=`<div class="rung" style="top:${ladderY(r)}%"><span>${PC_NAME[pc]}</span></div>`;
+    }
+  }
+  h+='<div class="hl" style="top:6px">高 ⬆</div><div class="hl" style="bottom:6px">低 ⬇</div>';
+  $('rungs').innerHTML=h;
 }
 function render(){
   const e=energy/100;

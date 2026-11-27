@@ -115,6 +115,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 .mini{width:260px;height:16px;border-radius:9px;background:#0006;border:1px solid var(--line);overflow:hidden;position:relative}
 .mini::before{content:'';position:absolute;top:0;bottom:0;left:18%;width:60%;background:#4ade8033}
 .miniFill{height:100%;width:0;background:var(--good);transition:width .06s}
+@keyframes snooze{0%,100%{transform:scale(1) rotate(-3deg)}50%{transform:scale(1.04) rotate(3deg)}}
 .count{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:30vh;font-weight:900;color:#ffd36b;text-shadow:0 0 40px #ffb347;pointer-events:none;z-index:8}
 </style>
 </head>
@@ -176,7 +177,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
       <button class="big" id="startBtn">開始治療 ✨</button>
       <div class="err" id="err"></div>
       <div class="hint">第一次會詢問麥克風權限，請按「允許」。沒有麥克風也能先試玩：遊戲中<b>按住空白鍵</b>就等於「唱得剛剛好」。<br>
-      老師快捷鍵：N 下一隻　P 播放目標音　Esc 回到設定</div>
+      老師快捷鍵：Enter 暫停／繼續　N 下一隻　P 播放目標音　Esc 回到設定</div>
     </div>
   </div>
 </section>
@@ -189,6 +190,7 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
     <div><select id="songSel2" class="sel" style="display:none;font-size:14px;padding:5px 8px"></select>
          <button class="smallbtn" id="demoBtn" style="display:none">🔊 示範</button>
          <button class="smallbtn" id="playRef" style="display:none">🔊 聽目標音</button>
+         <button class="smallbtn" id="pauseBtn" style="font-size:16px;font-weight:700">⏸ 暫停</button>
          <button class="smallbtn" id="calBtn">🎚 校正音量</button>
          <button class="smallbtn" id="backBtn">⚙ 設定</button></div>
   </div>
@@ -252,6 +254,14 @@ input[type=range]{width:260px;accent-color:#ff8fc8}
 </div>
 
 <div class="count" id="count"></div>
+<div class="overlay" id="pauseOv">
+  <div class="beast" id="pauseBeast" style="font-size:min(26vh,30vw);animation:snooze 2.4s ease-in-out infinite"></div>
+  <div style="font-size:min(8vh,10vw);margin-top:-2vh">💤</div>
+  <h2>休息一下 ☕</h2>
+  <p>神獸也在睡午覺，喝口水、深呼吸～</p>
+  <p id="pauseInfo" style="margin-top:8px;opacity:.75;font-size:18px"></p>
+  <button class="big" id="resumeBtn">▶ 繼續治療</button>
+</div>
 <div class="overlay" id="calOv">
   <div style="font-size:min(14vh,18vw)">🎚</div>
   <h2>音量校正</h2>
@@ -677,7 +687,7 @@ function loop(now){
     if(m.freq>0){ const r=Math.round(69+12*Math.log2(m.freq/440)); $('miniInfo').textContent=`聽到：${PC_NAME[((r%12)+12)%12]}　（正常唱歌時，音量條應該在綠色區）`; }
     else $('miniInfo').textContent= m.level>0.05 ? '有聲音，但聽不出音高（說話、拍手、雜音）' : '安靜中…';
   }
-  else if($('game').classList.contains('show') && !$('calOv').classList.contains('show') && !$('healOv').classList.contains('show') && !$('endOv').classList.contains('show')){
+  else if($('game').classList.contains('show') && !paused && !$('calOv').classList.contains('show') && !$('healOv').classList.contains('show') && !$('endOv').classList.contains('show')){
     step(dt, now);
   }
   requestAnimationFrame(loop);
@@ -701,7 +711,7 @@ function step(dt, now){
     const nt=S.notes[S.ni];
     if(S.phase==='play' && nt && !nt.rest) songPc=notePc(nt.n);
   }
-  if(spaceDown){ level=Math.max(level,.5); clarity=1;
+  if(spaceDown){ level=Math.max(level,.5); clarity=1; if(freq<=0) freq=261.63;
     if(cfg.mode==='note'&&target) freq=target.f*(1+(Math.random()-.5)*.01);
     if(songPc!==null) freq=261.63*Math.pow(2,songPc/12);
   }
@@ -880,7 +890,29 @@ $('nextBtn').onclick=()=>{
   }
 };
 $('againBtn').onclick=()=>{$('endOv').classList.remove('show'); startGame();};
-$('backBtn').onclick=()=>{ stopDemo(); showCount(0); show('setup'); };
+/* ---- 暫停 ---- */
+let paused=false, pauseAt=0;
+function pauseGame(){
+  if(paused || !$('game').classList.contains('show') || $('healOv').classList.contains('show') || $('endOv').classList.contains('show') || cal.on) return;
+  paused=true; pauseAt=performance.now(); stopDemo(); showCount(0);
+  $('pauseBeast').textContent=lineup[idx].e;
+  $('pauseBeast').style.filter=$('beast').style.filter;
+  $('pauseInfo').textContent=`${lineup[idx].n} 目前恢復了 ${Math.floor(energy)}%`;
+  $('pauseOv').classList.add('show');
+}
+function resumeGame(){
+  if(!paused) return;
+  const away=performance.now()-pauseAt;
+  tBeast+=away; tStart+=away;            // 休息的時間不算進治療時間
+  paused=false; $('pauseOv').classList.remove('show');
+  last=performance.now();
+  if(cfg.mode==='song' && cfg.pace==='beat' && S.ni<S.notes.length){   // 跟拍：從這個音重新數 4 拍再開始
+    S.t=0; S.gain[S.ni]=0; S.phase='count'; S.countT=0; S.lastTick=-1; markStrip();
+  }
+}
+$('pauseBtn').onclick=pauseGame;
+$('resumeBtn').onclick=resumeGame;
+$('backBtn').onclick=()=>{ paused=false; $('pauseOv').classList.remove('show'); stopDemo(); showCount(0); show('setup'); };
 function playCurrent(){
   if(cfg.mode==='song'){ const nt=S.notes[S.ni]; if(nt&&!nt.rest) playTone(noteFreq(nt.n),1.2); }
   else if(target) playTone(target.f,1.4);
@@ -896,7 +928,8 @@ addEventListener('keydown',e=>{
   if(!$('game').classList.contains('show')) return;
   if(e.key==='n'||e.key==='N'){ if(!$('healOv').classList.contains('show')&&!$('endOv').classList.contains('show')){ energy=100; } }
   if(e.key==='p'||e.key==='P'){ if(cfg.mode!=='choir') playCurrent(); }
-  if(e.key==='Escape'){ stopDemo(); showCount(0);$('healOv').classList.remove('show'); $('endOv').classList.remove('show'); show('setup'); }
+  if(e.key==='Enter'){ e.preventDefault(); paused?resumeGame():pauseGame(); }
+  if(e.key==='Escape'){ stopDemo(); showCount(0); paused=false; $('pauseOv').classList.remove('show');$('healOv').classList.remove('show'); $('endOv').classList.remove('show'); show('setup'); }
 });
 addEventListener('keyup',e=>{ if(e.code==='Space') spaceDown=false; });
 setSens(floorToSens(calFloor));
